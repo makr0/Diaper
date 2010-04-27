@@ -15,6 +15,8 @@
 		Importantly it has been tested only with dia 0.94 and the parser is HIGHLY optimized for 0.94
 */
 
+// #define _DIAPER_DEBUG
+
 #ifndef __diaper_DIAPER_H
 #define __diaper_DIAPER_H
 

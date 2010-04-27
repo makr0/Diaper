@@ -135,7 +135,7 @@ Diaper::Type Diaper::get_Object_Type(const std::string& str)
 			msg = "Diaper does not deal with participation, instead use line";
 			throw Invalid_Diaper_Format_Exception(msg.c_str());
 			break;
-		default:	throw Invalid_Diaper_Format_Exception("Invalid Object found") ;
+		default:	throw Invalid_Diaper_Format_Exception("Invalid Object found:" ) ;
 	}
 }
 
@@ -153,16 +153,13 @@ void Diaper::parse_File(const char* name) throw(std::ios::failure, Diaper_Except
 	std::string input_Line;
 	const std::string DIA_OBJECT_TAG = "<dia:object type=\"";
 	const std::string DIA_CLOSE_STRING = "\"";
-
 	// Do a sanity check on file.
 
 	while ( std::getline(input_File_, input_Line ) )
 	{
 		++line_Number_;		
-//		std::cout << input_Line << '\n';
 		std::string::size_type index_Start = input_Line.find(DIA_OBJECT_TAG);
-		
-		if ( index_Start != ( unsigned int ) -1 )
+		if ( index_Start != std::string::npos )
 		{
 			/*
 				*	Skip the object tag
@@ -175,11 +172,8 @@ void Diaper::parse_File(const char* name) throw(std::ios::failure, Diaper_Except
 				* ( start, end )
 			*/
 					
-		 	std::string object	  = input_Line.substr(index_Start, index_End - index_Start
-				
-				
-);
-		switch ( get_Object_Type(object) )
+		 	std::string object	  = input_Line.substr(index_Start, index_End - index_Start );
+            switch ( get_Object_Type(object) )
 			{
 				case ENTITY_:
 					parse_Entity(input_Line);
@@ -287,7 +281,7 @@ Int_Int_Pair_T Diaper::get_Relation_Cardinality(std::string& name)
 		}
 		index_Start = index_End;
 		index_End = str.find('#', index_Start + 1 );
-		if ( ( index_End == ( std::string::size_type )-1 ) || ( index_End == index_Start + 1) )		{
+		if ( ( index_End ==  std::string::npos ) || ( index_End == index_Start + 1) )		{
 			card_Pair.second = card_Pair.first; 
 		}
 		else {
@@ -331,13 +325,13 @@ void Diaper::parse_Relation(const std::string& obj_Line)
 
 	// Now try to find out if we have total participation or not.
 
-	if ( str.find("#LT", index_Start + 1 ) != (std::string::size_type) ( - 1 ) ) {
+	if ( str.find("#LT", index_Start + 1 ) != std::string::npos ) {
 		rel->set_Left_Participation(true);
 	}
 	else {
 		rel->set_Right_Participation(false);
 	}
-	if ( str.find("#RT", index_Start + 1 ) != (std::string::size_type) ( -1 ) ) {
+	if ( str.find("#RT", index_Start + 1 ) != std::string::npos ) {
 		rel->set_Right_Participation(true);
 	}
 	else	{
@@ -425,7 +419,7 @@ void Diaper::parse_Attribute(const std::string& obj_Line)
 	
 	std::string type;
 	
-	if ( index_End == (std::string::size_type) ( -1 ) )
+	if ( index_End == std::string::npos )
 	{
 		std::cerr << "ERROR::Type of " << name << " not specified " << '\n';				
 		exit(-1);					
@@ -474,14 +468,34 @@ Diaper::Int_Int_Pair_T Diaper::get_Line_Connection()
 {
 
 	const char* DIA_CONNECTION = "<dia:connection";
+    const char* DIA_CONNECTION_GROUP_START = "<dia:connections>";
+    const char* DIA_CONNECTION_GROUP_END = "</dia:connections>";
+    const char* DIA_OBJECT_END = "</dia:object>";
+	const char * error_Msg = 
+					"ERROR::Unexpected Input File format\n"
+					"Line with open connections found.\nMake sure all your Lines are connected.";
+
 	std::string str;
 	std::getline(input_File_, str);
 
-	const char * error_Msg = 
-					"ERROR::Input File format is corrupted\n"
-					"Are you sure your lines are connected?\n";
-	if ( str.find(DIA_CONNECTION) == std::string::size_type(-1) )
-	{		throw Invalid_Diaper_Format_Exception(error_Msg); }
+	while ( str.find(DIA_CONNECTION_GROUP_START) == std::string::npos )
+	{
+	   line_Number_ += 1;
+	   std::getline(input_File_, str);
+	   if( str.find(DIA_OBJECT_END) != std::string::npos )
+	   { 
+	     std::cout << "Hit end of object while looking for connections\n"; 
+	     throw Invalid_Diaper_Format_Exception(error_Msg); 
+	   }
+	}
+					
+    std::getline(input_File_, str);
+    line_Number_ += 1;
+	if ( str.find(DIA_CONNECTION) == std::string::npos  )
+	{
+        std::cout << "Last Line (" <<  line_Number_ << ") was: '" << str << "'\n";
+	    throw Invalid_Diaper_Format_Exception(error_Msg);
+	}
 
 	Diaper::Int_Int_Pair_T rel;
 
@@ -489,8 +503,13 @@ Diaper::Int_Int_Pair_T Diaper::get_Line_Connection()
 
 	/* Move on to the next line */
 	std::getline(input_File_, str);
-	if ( str.find(DIA_CONNECTION) == std::string::size_type(-1)  )
-	{	 throw Invalid_Diaper_Format_Exception(error_Msg);}
+    line_Number_ += 1;
+
+	if ( str.find(DIA_CONNECTION) == std::string::npos  )
+    {
+        std::cout << "Last Line (" <<  line_Number_ << ") was: '" << str << "'\n";
+        throw Invalid_Diaper_Format_Exception(error_Msg);
+    }
 
 	rel.second = get_Connection_Handle(str);
 
@@ -508,16 +527,23 @@ void Diaper::parse_Line(const std::string& obj_Line)
 	std::string str;
 	
 	get_Object_Id(obj_Line);
-	skip_Lines(LINE_SKIP_LINES - 1);
+	
+//	skip_Lines(LINE_SKIP_LINES - 1);
 
 	/* Now get the From and to and put them in the to_Do List */
 
-	Int_Int_Pair_T	p = get_Line_Connection();
-	Line_Rep rep;
-	rep.id_From = p.first;
-	rep.id_To	= p.second;
-	rep.line	= LINE_;
-	to_Do_Pairs.push_back(rep);
+    try {
+	    Int_Int_Pair_T	p = get_Line_Connection();
+        Line_Rep rep;
+        rep.id_From = p.first;
+        rep.id_To   = p.second;
+        rep.line    = LINE_;
+        to_Do_Pairs.push_back(rep);
+	} catch ( Diaper_Exception diaper_Ex)    {
+        std::cout << "Last line was:\n" << obj_Line << "\n";
+	    throw diaper_Ex;
+	}
+	
 
 }
 
@@ -614,6 +640,10 @@ std::string Diaper::create_Rec_Table( Entity* ent)
 			}
 			output += (*it_Pk)->get_Name();
 			it_Pk ++;
+			// nur ein primary key pro tabelle
+			// nämlich der erste der in dieser Liste steht. hoffentlich stimmt das immer
+			it_Pk = pr_Key.end();
+			
 			if ( it_Pk != pr_Key.end() )		{
 				output += " , ";
 			}
@@ -621,7 +651,7 @@ std::string Diaper::create_Rec_Table( Entity* ent)
 		output+= " ) ";
 	}
 
-	output += " );\n";
+	output += " )ENGINE=InnoDB DEFAULT CHARSET=utf8 ;\n";
 
 	// For all multivalued attributes create a table
 	std::list<Entity*>::const_iterator it_MV = multi_Val.begin();
@@ -698,7 +728,7 @@ std::string create_Table(const std::string& name, const std::list<Attribute*>& a
 	}
 	
 	
-	output += " );\n";
+	output += " ) ENGINE=InnoDB DEFAULT CHARSET=utf8 ;\n";
 	return output;
 }
 
@@ -795,7 +825,7 @@ std::string get_Foreign_Key(Entity* left, Entity* right, Relation* rel, bool app
 		is_Left_Total_Part = rel->get_Left_Participation();
 		is_Right_Total_Part = rel->get_Right_Participation();
 	}
-
+/*
 	if ( ( is_Right_Total_Part == false ) && ( is_Left_Total_Part == false ) )	{
 		constraint += " ON DELETE SET NULL ON UPDATE CASCADE ";
 	}
@@ -809,6 +839,7 @@ std::string get_Foreign_Key(Entity* left, Entity* right, Relation* rel, bool app
 	else if ( (right->is_Weak() == false) ) {
 			constraint += " ON DELETE SET NULL ON UPDATE CASCADE ";
 	}
+*/
 	output = output + " ( " + foreign + " ) REFERENCES " + ref_Name + " ( " + primary + " ) " + constraint + ";\n";
 	return output;	
 }
